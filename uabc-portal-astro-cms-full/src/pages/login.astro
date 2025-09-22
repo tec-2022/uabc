@@ -1,0 +1,55 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+<BaseLayout title="Iniciar sesión">
+  <section class="min-h-[70vh] grid place-items-center p-6">
+    <form id="loginForm" class="w-full max-w-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 space-y-4">
+      <h1 class="text-xl font-semibold">Iniciar sesión</h1>
+      <div>
+        <label class="block text-sm mb-1">Correo</label>
+        <input id="email" type="email" required class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900" placeholder="tucorreo@uabc.edu.mx" />
+      </div>
+      <div>
+        <label class="block text-sm mb-1">Contraseña</label>
+        <input id="password" type="password" required class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900" placeholder="••••••••" />
+      </div>
+      <button class="w-full px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white">Entrar</button>
+      <p id="loginMsg" class="text-sm text-slate-600 dark:text-slate-300"></p>
+    </form>
+  </section>
+
+  <script is:inline>
+    import { getSupabase } from "@/lib/supabase";
+
+    async function checkSessionAndRedirect() {
+      const supabase = getSupabase();
+      if (!supabase) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const url = new URL(window.location.href);
+        const next = url.searchParams.get('next') || '/admin';
+        window.location.href = next;
+      }
+    }
+    checkSessionAndRedirect();
+
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const supabase = getSupabase();
+      const msg = document.getElementById("loginMsg");
+      if (!supabase) { msg.textContent = "Configura SUPABASE_URL y SUPABASE_ANON_KEY."; return; }
+
+      const email = (document.getElementById("email")).value.trim();
+      const password = (document.getElementById("password")).value;
+      msg.textContent = "Iniciando sesión...";
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) { msg.textContent = error.message; return; }
+
+      msg.textContent = "Autenticado. Redirigiendo…";
+      const url = new URL(window.location.href);
+      const next = url.searchParams.get('next') || '/admin';
+      window.location.href = next;
+    });
+  </script>
+</BaseLayout>

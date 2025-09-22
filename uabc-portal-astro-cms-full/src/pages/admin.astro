@@ -1,0 +1,118 @@
+---
+import AdminLayout from "../layouts/AdminLayout.astro";
+---
+<AdminLayout title="Panel de Administración">
+  <section class="max-w-6xl mx-auto p-6 space-y-8">
+    <header class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold">Panel de Administración</h1>
+      <div class="flex gap-2">
+        <a href="/login" class="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600">Login</a>
+        <button id="logoutBtn" class="px-3 py-2 rounded-lg bg-slate-800 text-white dark:bg-slate-700">Cerrar sesión</button>
+      </div>
+    </header>
+
+    <div>
+      <h2 class="text-lg font-semibold mb-3">KPIs</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+          <div class="text-sm text-slate-500">Publicaciones</div>
+          <div id="kpi-pubs" class="text-2xl font-semibold">—</div>
+        </div>
+        <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+          <div class="text-sm text-slate-500">Eventos</div>
+          <div id="kpi-ev" class="text-2xl font-semibold">—</div>
+        </div>
+        <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+          <div class="text-sm text-slate-500">Usuarios</div>
+          <div id="kpi-users" class="text-2xl font-semibold">—</div>
+        </div>
+      </div>
+      <p id="kpi-status" class="mt-2 text-sm text-slate-600 dark:text-slate-300"></p>
+    </div>
+
+    <div>
+      <h2 class="text-lg font-semibold mb-3">Contenido del sitio (CMS_CONTENT)</h2>
+      <p class="text-sm text-slate-600 dark:text-slate-300 mb-2">Edita el JSON que usa la portada. Guarda para aplicar cambios.</p>
+      <textarea id="cmsJson" class="w-full h-72 p-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 font-mono text-sm"></textarea>
+      <div class="mt-3 flex gap-2">
+        <button id="loadBtn" class="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600">Cargar</button>
+        <button id="saveBtn" class="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white">Guardar</button>
+        <span id="cms-status" class="text-sm text-slate-600 dark:text-slate-300"></span>
+      </div>
+    </div>
+  </section>
+
+  <script is:inline>
+    import { getSupabase } from "@/lib/supabase";
+    const supabase = getSupabase();
+
+    /* AUTH REDIRECT */
+    (async ()=>{
+      if (!supabase) { return; }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { window.location.href = '/login?next=%2Fadmin'; return; }
+    })();
+
+    const kpiStatus = document.getElementById("kpi-status");
+    const elPubs = document.getElementById("kpi-pubs");
+    const elEv = document.getElementById("kpi-ev");
+    const elUsers = document.getElementById("kpi-users");
+
+    async function loadKpis() {
+      if (!supabase) { kpiStatus.textContent = "Supabase no configurado."; return; }
+      try {
+        const { data, error } = await supabase.rpc('kpi_counts').single();
+        if (error) throw error;
+        elPubs.textContent = data?.pubs ?? "0";
+        elEv.textContent = data?.events ?? "0";
+        elUsers.textContent = data?.users ?? "0";
+        kpiStatus.textContent = "KPIs ok.";
+      } catch (e) {
+        console.error(e);
+        kpiStatus.textContent = "No se pudieron cargar los KPIs.";
+      }
+    }
+
+    const CMS_ID = "cms";
+    const cmsStatus = document.getElementById("cms-status");
+    const cmsJson = document.getElementById("cmsJson");
+    const loadBtn = document.getElementById("loadBtn");
+    const saveBtn = document.getElementById("saveBtn");
+
+    async function loadCMS() {
+      if (!supabase) { cmsStatus.textContent = "Supabase no configurado."; return; }
+      cmsStatus.textContent = "Cargando…";
+      const { data, error } = await supabase.from('site_content').select('data').eq('id', CMS_ID).single();
+      if (error) { cmsStatus.textContent = error.message; return; }
+      cmsJson.value = JSON.stringify(data.data, null, 2);
+      cmsStatus.textContent = "Cargado.";
+    }
+
+    async function saveCMS() {
+      if (!supabase) { cmsStatus.textContent = "Supabase no configurado."; return; }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { cmsStatus.textContent = "Inicia sesión para guardar."; return; }
+
+      let payload;
+      try { payload = JSON.parse(cmsJson.value); }
+      catch { cmsStatus.textContent = "JSON inválido."; return; }
+
+      cmsStatus.textContent = "Guardando…";
+      const { error } = await supabase.from('site_content').upsert({ id: CMS_ID, data: payload }, { onConflict: 'id' });
+      if (error) { cmsStatus.textContent = error.message; return; }
+      cmsStatus.textContent = "Guardado ✓";
+    }
+
+    document.getElementById("logoutBtn").addEventListener("click", async () => {
+      if (!supabase) return;
+      await supabase.auth.signOut();
+      window.location.href = "/login";
+    });
+    loadBtn.addEventListener("click", loadCMS);
+    saveBtn.addEventListener("click", saveCMS);
+
+    // init
+    loadKpis();
+    loadCMS();
+  </script>
+</AdminLayout>
